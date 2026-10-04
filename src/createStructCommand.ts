@@ -1,13 +1,16 @@
 import { COMMAND_RETURN } from "@collidor/command";
+import type { StructuralCapability } from "@collidor/struct";
 import {
   StructCommand,
-  parseStructDefault,
   type AnyStructSchema,
+  type AnyCommandInput,
   type InferSchemaOutput,
+  type InferSchemaInput,
+  type CapabilityInput,
 } from "./structCommand.ts";
 
 export interface StructCommandInstance<
-  TInputSchema extends AnyStructSchema = AnyStructSchema,
+  TInputSchema extends AnyCommandInput = AnyCommandInput,
   TOutputSchema extends AnyStructSchema = AnyStructSchema,
 > extends StructCommand<TInputSchema, TOutputSchema> {
   schema: {
@@ -15,14 +18,15 @@ export interface StructCommandInstance<
     output: TOutputSchema;
   };
   data: InferSchemaOutput<TInputSchema>;
+  satisfiesCapability(capability: StructuralCapability): boolean;
 }
 
 export interface StructCommandConstructor<
-  TInputSchema extends AnyStructSchema = AnyStructSchema,
+  TInputSchema extends AnyCommandInput = AnyCommandInput,
   TOutputSchema extends AnyStructSchema = AnyStructSchema,
 > {
   new (
-    ...args: [data?: InferSchemaOutput<TInputSchema>]
+    ...args: [data?: CapabilityInput<InferSchemaInput<TInputSchema>>]
   ): StructCommandInstance<TInputSchema, TOutputSchema>;
   readonly prototype: StructCommandInstance<TInputSchema, TOutputSchema>;
   readonly name: string;
@@ -40,7 +44,7 @@ export interface StructCommandConstructor<
  * remain stable and deterministic across microfrontends and workers.
  *
  * @param name The unique name of the struct command.
- * @param inputSchema The @collidor/struct schema for payload validation and typing.
+ * @param inputSchema The @collidor/struct schema or StructuralCapability for payload validation and typing.
  * @param outputSchema The @collidor/struct schema for return value typing.
  * @returns A class constructor extending StructCommand with the specified name and schemas.
  *
@@ -57,7 +61,7 @@ export interface StructCommandConstructor<
  * ```
  */
 export function createStructCommand<
-  const TInputSchema extends AnyStructSchema,
+  const TInputSchema extends AnyCommandInput,
   const TOutputSchema extends AnyStructSchema,
 >(
   name: string,
@@ -66,7 +70,7 @@ export function createStructCommand<
 ): StructCommandConstructor<TInputSchema, TOutputSchema>;
 
 export function createStructCommand<
-  const TInputSchema extends AnyStructSchema,
+  const TInputSchema extends AnyCommandInput,
   const TOutputSchema extends AnyStructSchema,
 >(
   name: string,
@@ -77,7 +81,7 @@ export function createStructCommand<
 ): StructCommandConstructor<TInputSchema, TOutputSchema>;
 
 export function createStructCommand<
-  const TInputSchema extends AnyStructSchema,
+  const TInputSchema extends AnyCommandInput,
   const TOutputSchema extends AnyStructSchema,
 >(
   name: string,
@@ -121,10 +125,7 @@ export function createStructCommand<
     override schema = schema;
 
     constructor(...args: any[]) {
-      const data = args.length > 0 && args[0] !== undefined
-        ? args[0]
-        : parseStructDefault(schema.input);
-      super(schema, data);
+      super(schema, args[0]);
     }
   };
 

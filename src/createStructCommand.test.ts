@@ -201,3 +201,66 @@ Deno.test("createStructCommand - Subclassing", async (t) => {
     assertInstanceOf(child, Command);
   });
 });
+
+import { StandardCapabilities } from "@collidor/struct";
+
+Deno.test("createStructCommand - Capability Power & Extraction", async (t) => {
+  await t.step("should create named command with StructuralCapability and extract defined fields", () => {
+    const SetPositionCommand = createStructCommand(
+      "SetPositionCommand",
+      StandardCapabilities.HasPosition,
+      s.boolean(),
+    );
+
+    assertEquals(SetPositionCommand.name, "SetPositionCommand");
+
+    const actorEntity = {
+      id: "actor_42",
+      type: "npc",
+      x: 50,
+      y: 100,
+      z: 15,
+      hp: 80,
+      inventory: ["potion", "map"],
+    };
+
+    const cmd = new SetPositionCommand(actorEntity);
+
+    assertEquals(cmd.constructor.name, "SetPositionCommand");
+    assertEquals(cmd.data.x, 50);
+    assertEquals(cmd.data.y, 100);
+    assertEquals(cmd.data.z, 15);
+
+    // Stripped fields
+    assertEquals((cmd.data as any).id, undefined);
+    assertEquals((cmd.data as any).type, undefined);
+    assertEquals((cmd.data as any).hp, undefined);
+    assertEquals((cmd.data as any).inventory, undefined);
+  });
+
+  await t.step("should execute capability-based named command on CommandBus", () => {
+    const bus = new CommandBus();
+    const HealCommand = createStructCommand(
+      "HealCommand",
+      StandardCapabilities.HasHealth,
+      s.number(),
+    );
+
+    bus.register(HealCommand, (cmd) => {
+      // Handler only needs hp and optional max_hp
+      return (cmd.data.max_hp ?? 100) - cmd.data.hp;
+    });
+
+    const woundedEntity = {
+      id: "warrior_7",
+      name: "Gimli",
+      hp: 40,
+      max_hp: 120,
+      rage: 50,
+    };
+
+    const neededHealing = bus.execute(new HealCommand(woundedEntity));
+    assertEquals(neededHealing, 80);
+  });
+});
+
