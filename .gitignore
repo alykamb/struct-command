@@ -1,0 +1,6 @@
+node_modules
+dist
+coverage
+cov_profile
+report
+.release_flag

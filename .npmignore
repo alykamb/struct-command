@@ -1,0 +1,13 @@
+.*
+!dist
+!dist/**
+!package.json
+!README.md
+!LICENSE
+tests
+src
+tsconfig.json
+deno.json
+deno.lock
+publishJsr.ts
+sync.ts
