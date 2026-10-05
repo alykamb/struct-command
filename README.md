@@ -101,84 +101,65 @@ export class SearchArticlesCommand extends structCommand(FilterSchema, ResultSch
 const cmd = new SearchArticlesCommand();
 console.log(cmd.data.query); // ""
 console.log(cmd.data.limit); // 10
-### 3. Capability Power & Automatic Input Extraction (Odin-Inspired)
+```
 
-Commands leverage **structural capabilities**: they accept inputs that contain the necessary data (such as rich domain models or game entities), and **automatically extract strictly the defined fields**. Extraneous properties are stripped away, so command handlers continue to receive and depend only on the defined input.
+### 3. Component Requirements (Odin-style)
+
+A command can require a **named component** (a `@collidor/struct` struct) instead of a payload shape. Any object that carries that component under a property named after it is accepted, and the handler only ever receives the component.
 
 ```typescript
-import { createStructCommand } from "@collidor/struct-command";
-import { s, StandardCapabilities } from "@collidor/struct";
-import { CommandBus } from "@collidor/command";
+import { createStructCommand, requires } from "@collidor/struct-command";
+import { s } from "@collidor/struct";
 
-// Define command using a struct or a StructuralCapability
-export const MoveCommand = createStructCommand(
-  "MoveCommand",
-  StandardCapabilities.HasPosition, // Requires { x: number, y: number, z?: number }
-  s.boolean()
-);
+// A component is a struct with a name
+const Position = s.struct({ x: s.number(), y: s.number() }).named("Position");
+const Health = s.struct({ hp: s.number(), max: s.number() }).named("Health");
 
-const bus = new CommandBus();
+const Move = createStructCommand("Move", requires(Position), s.boolean());
 
-bus.register(MoveCommand, (cmd) => {
-  // Handler only receives { x, y, z }!
-  console.log(`Moving to coordinates (${cmd.data.x}, ${cmd.data.y})`);
+bus.register(Move, (cmd) => {
+  cmd.data; // { x, y }  (only the Position component)
   return true;
 });
 
-// A complex game entity with stats, inventory, and combat pools:
-const goblinEntity = {
-  id: "goblin_99",
-  name: "Goblin Scout",
-  x: 100,
-  y: 250,
-  hp: 12,
-  max_hp: 12,
-  inventory: ["dagger", "torch"],
-};
+const goblin = { id: "g1", name: "Goblin", position: { x: 1, y: 2 }, health: { hp: 5, max: 10 } };
 
-// Pass the entire entity: MoveCommand extracts ONLY { x, y }!
-const cmd = new MoveCommand(goblinEntity);
-console.log(cmd.data); // { x: 100, y: 250 }
-console.log((cmd.data as any).inventory); // undefined
-
-bus.execute(cmd);
+bus.execute(new Move(goblin));             // goblin.position extracted
+bus.execute(new Move({ Position: {...} })); // "Position" works too
+// new Move({ id: "x" })                    // compile error: no position/Position property
 ```
 
-You can also check capability satisfaction directly on any command instance:
-```typescript
-cmd.satisfiesCapability(StandardCapabilities.HasPosition); // true
-cmd.satisfiesCapability(StandardCapabilities.HasHealth);   // false
-```
+The lookup is a direct property read: the key is the component name with the first letter lower- or upper-cased (`Position` matches `position` or `Position`). No scanning, no registry.
+
+- **Several components:** `requires(Position, Health)` gives `cmd.data` as `{ position, health }` (keys are the lower-cased names).
+- **Ambiguity:** if an object has both `position` and `Position`, constructing the command throws `ComponentResolutionError`.
+- Component values are validated with their schema when extracted; both missing and wrongly typed components are also compile-time errors.
+- Components must be named (`.named("...")`); `requires()` rejects unnamed structs.
 
 ---
 
 ## API Reference
 
-### `createStructCommand(name, inputSchema, outputSchema)`
+### `createStructCommand(name, input, output)`
 ### `createStructCommand(name, { input, output })`
 Creates a named command class constructor extending `StructCommand`.
 
 - `name` *(string)*: Unique identifier of the command class. Throws `TypeError` if empty or whitespace.
-- `inputSchema`: `@collidor/struct` schema or `StructuralCapability` for payload validation, extraction, and typing.
-- `outputSchema`: `@collidor/struct` schema for return value typing.
+- `input`: a `@collidor/struct` schema, or `requires(...)`.
+- `output`: `@collidor/struct` schema for return value typing.
 
-### `structCommand(inputSchema, outputSchema)`
+### `structCommand(input, output)`
 ### `structCommand({ input, output })`
 Creates an anonymous command class constructor extending `StructCommand`.
 
+### `requires(...components)`
+Declares required named components (`struct.named("Name")`). Also exports `ComponentResolutionError`, `resolveComponent`, `extractRequirement`.
+
 ### `StructCommand`
 Base class extending `@collidor/command`'s `Command<TInput, TOutput>`.
-- `command.schema.input`: The input schema or capability descriptor.
-- `command.schema.output`: The output schema descriptor.
-- `command.data`: The typed and extracted input payload (extraneous properties stripped).
-- `command.validate()`: Validates `data` against the input schema or capability, returning `{ value, issues }`.
-- `command.satisfiesCapability(capability)`: Returns whether `command.data` satisfies a given `StructuralCapability`.
-
-### Utilities
-- `extractStructInput(schema, data)`: Extracts defined fields from an input object based on the schema or capability, stripping extra keys.
-- `capabilityToStruct(capability)`: Converts a `StructuralCapability` into an executable `StructSchema`.
-- `isStructuralCapability(value)`: Type guard identifying `StructuralCapability` objects.
-
+- `command.schema.input` / `command.schema.output`: the input and output definitions.
+- `command.data`: the typed payload (schema data, or the extracted component(s)).
+- `command.validate()`: Validates `data` against the input schema, returning `{ value, issues }`.
 
 ---
 

@@ -1,11 +1,12 @@
 import { Command, COMMAND_RETURN } from "@collidor/command";
+import type { BaseSchema } from "@collidor/struct";
 import {
-  s,
-  CapabilityValidator,
-  type BaseSchema,
-  type StructuralCapability,
-  type CapabilityFieldRequirement,
-} from "@collidor/struct";
+  extractRequirement,
+  isComponentRequirement,
+  type ComponentRequirement,
+  type HolderGuard,
+  type RequirementOutput,
+} from "./requires.ts";
 
 export interface StandardSchemaV1Issue {
   readonly message: string;
@@ -46,83 +47,11 @@ export type AnyStructSchema =
       "~standard"?: StandardSchemaV1<any, any>["~standard"];
     };
 
-export type AnyCommandInput = AnyStructSchema | StructuralCapability;
+/** A command input is either a schema or a set of required components (Odin-style). */
+export type AnyCommandInput = AnyStructSchema | ComponentRequirement;
 
-export function isStructuralCapability(value: unknown): value is StructuralCapability {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "name" in value &&
-    typeof (value as any).name === "string" &&
-    "fields" in value &&
-    Array.isArray((value as any).fields)
-  );
-}
-
-export function capabilityToStruct(capability: StructuralCapability): BaseSchema<any, any> {
-  const shape: Record<string, BaseSchema<any, any>> = {};
-  for (const field of capability.fields) {
-    const kinds = Array.isArray(field.kind) ? field.kind : [field.kind];
-    let fieldSchema: BaseSchema<any, any>;
-    if (kinds.includes("string")) {
-      fieldSchema = s.string();
-    } else if (kinds.includes("number") || kinds.includes("integer")) {
-      fieldSchema = s.number();
-    } else if (kinds.includes("boolean")) {
-      fieldSchema = s.boolean();
-    } else if (kinds.includes("date")) {
-      fieldSchema = s.date();
-    } else if (kinds.includes("bigint")) {
-      fieldSchema = s.bigint();
-    } else {
-      fieldSchema = s.any();
-    }
-
-    if (field.optional) {
-      fieldSchema = (fieldSchema as any).optional();
-    }
-    shape[field.name] = fieldSchema;
-  }
-  const structSchema = s.struct(shape) as any;
-  structSchema.capability = capability;
-  return structSchema;
-}
-
-export type InferCapabilityField<T extends CapabilityFieldRequirement> =
-  T["kind"] extends "string"
-    ? string
-    : T["kind"] extends "number" | "integer"
-      ? number
-      : T["kind"] extends ("number" | "integer")[]
-        ? number
-        : T["kind"] extends "boolean"
-          ? boolean
-          : T["kind"] extends "date"
-            ? Date
-            : T["kind"] extends "bigint"
-              ? bigint
-              : any;
-
-export type StandardCapabilityTypes = {
-  HasPosition: { x: number; y: number; z?: number };
-  HasHealth: { hp: number; max_hp?: number };
-  HasVelocity: { vx: number; vy: number };
-  HasCombatant: { name: string; initiative?: number; is_active?: boolean };
-};
-
-export type InferCapability<T extends StructuralCapability> =
-  T["name"] extends keyof StandardCapabilityTypes
-    ? StandardCapabilityTypes[T["name"]]
-    : T extends { fields: ReadonlyArray<infer F> }
-      ? F extends { name: infer N extends string }
-        ? string extends N
-          ? Record<string, any>
-          : { [K in N]: any }
-        : Record<string, any>
-      : Record<string, any>;
-
-export type InferSchemaOutput<T> = T extends StructuralCapability
-  ? InferCapability<T>
+export type InferSchemaOutput<T> = T extends ComponentRequirement
+  ? RequirementOutput<T>
   : T extends BaseSchema<any, infer O>
     ? O
     : T extends StandardSchemaV1<any, infer O>
@@ -135,8 +64,8 @@ export type InferSchemaOutput<T> = T extends StructuralCapability
             ? O
             : any;
 
-export type InferSchemaInput<T> = T extends StructuralCapability
-  ? InferCapability<T>
+export type InferSchemaInput<T> = T extends ComponentRequirement
+  ? never
   : T extends BaseSchema<infer I, any>
     ? I
     : T extends StandardSchemaV1<infer I, any>
@@ -147,16 +76,14 @@ export type InferSchemaInput<T> = T extends StructuralCapability
           ? I
           : InferSchemaOutput<T>;
 
-export type CapabilityInput<T> = T extends readonly any[]
-  ? T
-  : T extends object
-    ? { [K in keyof T]: T[K] } & Record<string, unknown>
-    : T;
+/** Constructor type: plain schemas take their input; requirements accept any holder object. */
+export type StructCommandCtorArgs<T> = T extends ComponentRequirement
+  ? never
+  : [data?: InferSchemaInput<T>];
 
 export function parseStructDefault<T = any>(schema: any): T {
-  if (isStructuralCapability(schema)) {
-    const converted = capabilityToStruct(schema);
-    return parseStructDefault(converted);
+  if (isComponentRequirement(schema)) {
+    return undefined as T;
   }
   if (typeof schema?.parse === "function") {
     return schema.parse({});
@@ -173,55 +100,18 @@ export function parseStructDefault<T = any>(schema: any): T {
   return {} as T;
 }
 
-export function extractStructInput<T = any>(schema: AnyCommandInput, data: unknown): T {
+/**
+ * Resolves the command payload from whatever the caller passed in:
+ * - requirement: pulls the required component(s) out of the game object via the usage index.
+ * - schema: uses defaults when nothing is passed, else the data as given.
+ */
+export function extractStructInput<T = any>(input: AnyCommandInput, data: unknown): T {
+  if (isComponentRequirement(input)) {
+    return extractRequirement(input, data);
+  }
   if (data === undefined) {
-    return parseStructDefault(schema);
+    return parseStructDefault(input);
   }
-
-  if (data === null || typeof data !== "object") {
-    return data as T;
-  }
-
-  if (isStructuralCapability(schema)) {
-    const extracted: Record<string, unknown> = {};
-    for (const req of schema.fields) {
-      if (req.name in (data as Record<string, unknown>)) {
-        const val = (data as Record<string, unknown>)[req.name];
-        if (val !== undefined) {
-          extracted[req.name] = val;
-        }
-      }
-    }
-    return extracted as T;
-  }
-
-  const sAny = schema as any;
-  if (typeof sAny.safeParse === "function") {
-    const res = sAny.safeParse(data);
-    if (res.success) {
-      return res.data;
-    }
-  }
-
-  const fields = sAny.shape
-    ? Object.keys(sAny.shape)
-    : sAny.descriptor?.fields
-      ? Object.keys(sAny.descriptor.fields)
-      : null;
-
-  if (fields && fields.length > 0) {
-    const extracted: Record<string, unknown> = {};
-    for (const key of fields) {
-      if (key in (data as Record<string, unknown>)) {
-        const val = (data as Record<string, unknown>)[key];
-        if (val !== undefined) {
-          extracted[key] = val;
-        }
-      }
-    }
-    return extracted as T;
-  }
-
   return data as T;
 }
 
@@ -234,38 +124,17 @@ export class StructCommand<
       input: TInputSchema;
       output: TOutputSchema;
     },
-    data?: CapabilityInput<InferSchemaInput<TInputSchema>>,
+    data?: unknown,
   ) {
-    const extracted = extractStructInput<InferSchemaOutput<TInputSchema>>(
-      schema.input,
-      data,
-    );
-    super(extracted);
+    super(extractStructInput<InferSchemaOutput<TInputSchema>>(schema.input, data));
   }
 
   public validate(): ValidateResult<InferSchemaOutput<TInputSchema>> {
     const inputSchema = this.schema.input as any;
-    if (isStructuralCapability(inputSchema)) {
-      const capRes = CapabilityValidator.validateEntityData(
-        this.data as Record<string, unknown>,
-        inputSchema,
-      );
-      if (capRes.valid) {
-        return { value: this.data };
-      }
-      const issues: StandardSchemaV1Issue[] = [
-        ...capRes.missingFields.map((f) => ({
-          path: [{ key: f }],
-          message: `Field "${f}" is required by capability "${inputSchema.name}"`,
-        })),
-        ...capRes.typeMismatches.map((m) => ({
-          path: [{ key: m.field }],
-          message: `Field "${m.field}" expected ${m.expected}, received ${m.actual}`,
-        })),
-      ];
-      return { issues };
+    if (isComponentRequirement(inputSchema)) {
+      // Components were already resolved and validated at construction time.
+      return { value: this.data };
     }
-
     if (typeof inputSchema?.validate === "function") {
       return inputSchema.validate(this.data);
     }
@@ -278,21 +147,11 @@ export class StructCommand<
     }
     return { value: this.data };
   }
-
-  public satisfiesCapability(capability: StructuralCapability): boolean {
-    if (typeof this.data === "object" && this.data !== null) {
-      return CapabilityValidator.satisfies(
-        this.data as Record<string, unknown>,
-        capability,
-      );
-    }
-    return false;
-  }
 }
 
-export type StructCommandType<
-  TInputSchema extends AnyCommandInput = AnyCommandInput,
-  TOutputSchema extends AnyStructSchema = AnyStructSchema,
+export type StructCommandInstanceType<
+  TInputSchema extends AnyCommandInput,
+  TOutputSchema extends AnyStructSchema,
 > = Command<InferSchemaOutput<TInputSchema>, InferSchemaOutput<TOutputSchema>> & {
   schema: {
     input: TInputSchema;
@@ -300,8 +159,31 @@ export type StructCommandType<
   };
   data: InferSchemaOutput<TInputSchema>;
   validate(): ValidateResult<InferSchemaOutput<TInputSchema>>;
-  satisfiesCapability(capability: StructuralCapability): boolean;
 };
+
+export type StructCommandType<
+  TInputSchema extends AnyCommandInput = AnyCommandInput,
+  TOutputSchema extends AnyStructSchema = AnyStructSchema,
+> = StructCommandInstanceType<TInputSchema, TOutputSchema>;
+
+/** Constructor shape produced by `structCommand` for a given input. */
+export type StructCommandClass<
+  TInputSchema extends AnyCommandInput,
+  TOutputSchema extends AnyStructSchema,
+> =
+  & (TInputSchema extends ComponentRequirement
+    ? new <H extends object>(
+      data: H & HolderGuard<H, TInputSchema>,
+    ) => StructCommandInstanceType<TInputSchema, TOutputSchema>
+    : new (
+      ...args: StructCommandCtorArgs<TInputSchema>
+    ) => StructCommandInstanceType<TInputSchema, TOutputSchema>)
+  & {
+    schema: {
+      input: TInputSchema;
+      output: TOutputSchema;
+    };
+  };
 
 export function structCommand<
   const TInputSchema extends AnyCommandInput,
@@ -309,24 +191,7 @@ export function structCommand<
 >(
   inputSchema: TInputSchema,
   outputSchema: TOutputSchema,
-):
-  & (new (
-    data?: CapabilityInput<InferSchemaInput<TInputSchema>>,
-  ) => Command<InferSchemaOutput<TInputSchema>, InferSchemaOutput<TOutputSchema>> & {
-    schema: {
-      input: TInputSchema;
-      output: TOutputSchema;
-    };
-    data: InferSchemaOutput<TInputSchema>;
-    validate(): ValidateResult<InferSchemaOutput<TInputSchema>>;
-    satisfiesCapability(capability: StructuralCapability): boolean;
-  })
-  & {
-    schema: {
-      input: TInputSchema;
-      output: TOutputSchema;
-    };
-  };
+): StructCommandClass<TInputSchema, TOutputSchema>;
 
 export function structCommand<
   const TInputSchema extends AnyCommandInput,
@@ -336,24 +201,7 @@ export function structCommand<
     input: TInputSchema;
     output: TOutputSchema;
   },
-):
-  & (new (
-    data?: CapabilityInput<InferSchemaInput<TInputSchema>>,
-  ) => Command<InferSchemaOutput<TInputSchema>, InferSchemaOutput<TOutputSchema>> & {
-    schema: {
-      input: TInputSchema;
-      output: TOutputSchema;
-    };
-    data: InferSchemaOutput<TInputSchema>;
-    validate(): ValidateResult<InferSchemaOutput<TInputSchema>>;
-    satisfiesCapability(capability: StructuralCapability): boolean;
-  })
-  & {
-    schema: {
-      input: TInputSchema;
-      output: TOutputSchema;
-    };
-  };
+): StructCommandClass<TInputSchema, TOutputSchema>;
 
 export function structCommand<
   const TInputSchema extends AnyCommandInput,
@@ -370,6 +218,7 @@ export function structCommand<
   if (
     inputOrOptions &&
     typeof inputOrOptions === "object" &&
+    !isComponentRequirement(inputOrOptions) &&
     "input" in inputOrOptions &&
     "output" in inputOrOptions &&
     maybeOutput === undefined
@@ -391,7 +240,7 @@ export function structCommand<
     public override [COMMAND_RETURN]!: InferSchemaOutput<TOutputSchema>;
     override schema = schema;
 
-    constructor(data?: CapabilityInput<InferSchemaInput<TInputSchema>>) {
+    constructor(data?: unknown) {
       super(schema, data);
     }
   } as any;

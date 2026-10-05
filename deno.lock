@@ -3,9 +3,9 @@
   "specifiers": {
     "jsr:@collidor/command@^7.2.1": "7.3.0",
     "jsr:@collidor/event@^4.7.0": "4.7.0",
-    "jsr:@collidor/struct@0.1": "0.1.0",
     "jsr:@std/assert@^1.0.11": "1.0.19",
-    "jsr:@std/internal@^1.0.12": "1.0.14"
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "npm:zod@^3.24.2": "3.25.76"
   },
   "jsr": {
     "@collidor/command@7.3.0": {
@@ -17,9 +17,6 @@
     "@collidor/event@4.7.0": {
       "integrity": "5ee6dad931d8fe6f70b14998ef5eae3153590dd632997137049888cc23bd2a30"
     },
-    "@collidor/struct@0.1.0": {
-      "integrity": "018add96ab929b3e991e09c31a00b770836f2960296b6c15fad3562ca1078055"
-    },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
@@ -30,26 +27,18 @@
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     }
   },
+  "npm": {
+    "zod@3.25.76": {
+      "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
+    }
+  },
   "workspace": {
     "dependencies": [
       "jsr:@collidor/command@^7.2.1",
-      "jsr:@collidor/struct@0.1",
       "jsr:@std/assert@^1.0.11",
-      "jsr:@std/testing@^1.0.9"
-    ],
-    "packageJson": {
-      "dependencies": [
-        "npm:@collidor/command@^7.3.0",
-        "npm:@collidor/struct@0.1",
-        "npm:@semantic-release/changelog@^6.0.3",
-        "npm:@semantic-release/exec@^6.0.3",
-        "npm:@semantic-release/git@^10.0.1",
-        "npm:@swc/core@^1.13.5",
-        "npm:oxlint@^1.78.0",
-        "npm:semantic-release@^24.2.3",
-        "npm:tsup@8.5.0",
-        "npm:typescript@5.9.2"
-      ]
-    }
+      "jsr:@std/testing@^1.0.9",
+      "npm:vee-validate@^4.15.1",
+      "npm:zod@^3.24.2"
+    ]
   }
 }

@@ -42,7 +42,7 @@
     "license": "MIT",
     "devDependencies": {
         "@collidor/command": "^7.3.0",
-        "@collidor/struct": "^0.1.0",
+        "@collidor/struct": "^0.2.0",
         "@semantic-release/changelog": "^6.0.3",
         "@semantic-release/exec": "^6.0.3",
         "@semantic-release/git": "^10.0.1",
@@ -56,7 +56,7 @@
         "@collidor/command": "^7.3.0"
     },
     "peerDependencies": {
-        "@collidor/struct": ">=0.1.0"
+        "@collidor/struct": ">=0.2.0"
     },
     "engines": {
         "node": ">=24.0.0"

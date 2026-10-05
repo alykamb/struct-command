@@ -1,40 +1,25 @@
 import { COMMAND_RETURN } from "@collidor/command";
-import type { StructuralCapability } from "@collidor/struct";
 import {
   StructCommand,
-  type AnyStructSchema,
   type AnyCommandInput,
+  type AnyStructSchema,
   type InferSchemaOutput,
-  type InferSchemaInput,
-  type CapabilityInput,
+  type StructCommandClass,
 } from "./structCommand.ts";
-
-export interface StructCommandInstance<
-  TInputSchema extends AnyCommandInput = AnyCommandInput,
-  TOutputSchema extends AnyStructSchema = AnyStructSchema,
-> extends StructCommand<TInputSchema, TOutputSchema> {
-  schema: {
-    input: TInputSchema;
-    output: TOutputSchema;
-  };
-  data: InferSchemaOutput<TInputSchema>;
-  satisfiesCapability(capability: StructuralCapability): boolean;
-}
+import { isComponentRequirement } from "./requires.ts";
 
 export interface StructCommandConstructor<
   TInputSchema extends AnyCommandInput = AnyCommandInput,
   TOutputSchema extends AnyStructSchema = AnyStructSchema,
-> {
-  new (
-    ...args: [data?: CapabilityInput<InferSchemaInput<TInputSchema>>]
-  ): StructCommandInstance<TInputSchema, TOutputSchema>;
-  readonly prototype: StructCommandInstance<TInputSchema, TOutputSchema>;
+> extends Pick<StructCommandClass<TInputSchema, TOutputSchema>, "schema"> {
   readonly name: string;
-  readonly schema: {
-    readonly input: TInputSchema;
-    readonly output: TOutputSchema;
-  };
 }
+
+/** Named command class: constructor typing follows the input kind (schema or requirement). */
+export type NamedStructCommand<
+  TInputSchema extends AnyCommandInput,
+  TOutputSchema extends AnyStructSchema,
+> = StructCommandClass<TInputSchema, TOutputSchema> & { readonly name: string };
 
 /**
  * Creates a struct-validated command class constructor with an explicit name and schemas.
@@ -43,21 +28,13 @@ export interface StructCommandConstructor<
  * ensuring that command routing and serialization based on `command.constructor.name`
  * remain stable and deterministic across microfrontends and workers.
  *
- * @param name The unique name of the struct command.
- * @param inputSchema The @collidor/struct schema or StructuralCapability for payload validation and typing.
- * @param outputSchema The @collidor/struct schema for return value typing.
- * @returns A class constructor extending StructCommand with the specified name and schemas.
+ * The input may be a `@collidor/struct` schema, or `requires(Component)` to accept any game
+ * object carrying that component (the handler receives only the component).
  *
  * @example
  * ```ts
- * const CreateUser = createStructCommand(
- *   "CreateUser",
- *   s.struct({ name: s.string() }),
- *   s.struct({ id: s.string() }),
- * );
- *
- * bus.register(CreateUser, (cmd) => ({ id: "123" }));
- * const res = bus.execute(new CreateUser({ name: "Alice" }));
+ * const Move = createStructCommand("Move", requires(Position), s.boolean());
+ * bus.execute(new Move(goblin)); // goblin.position is extracted
  * ```
  */
 export function createStructCommand<
@@ -67,7 +44,7 @@ export function createStructCommand<
   name: string,
   inputSchema: TInputSchema,
   outputSchema: TOutputSchema,
-): StructCommandConstructor<TInputSchema, TOutputSchema>;
+): NamedStructCommand<TInputSchema, TOutputSchema>;
 
 export function createStructCommand<
   const TInputSchema extends AnyCommandInput,
@@ -78,7 +55,7 @@ export function createStructCommand<
     input: TInputSchema;
     output: TOutputSchema;
   },
-): StructCommandConstructor<TInputSchema, TOutputSchema>;
+): NamedStructCommand<TInputSchema, TOutputSchema>;
 
 export function createStructCommand<
   const TInputSchema extends AnyCommandInput,
@@ -89,7 +66,7 @@ export function createStructCommand<
     | TInputSchema
     | { input: TInputSchema; output: TOutputSchema },
   maybeOutput?: TOutputSchema,
-): StructCommandConstructor<TInputSchema, TOutputSchema> {
+): NamedStructCommand<TInputSchema, TOutputSchema> {
   if (typeof name !== "string" || name.trim().length === 0) {
     throw new TypeError("StructCommand name must be a non-empty string");
   }
@@ -100,6 +77,7 @@ export function createStructCommand<
   if (
     inputOrOptions &&
     typeof inputOrOptions === "object" &&
+    !isComponentRequirement(inputOrOptions) &&
     "input" in inputOrOptions &&
     "output" in inputOrOptions &&
     maybeOutput === undefined
@@ -124,8 +102,8 @@ export function createStructCommand<
     public override [COMMAND_RETURN]!: InferSchemaOutput<TOutputSchema>;
     override schema = schema;
 
-    constructor(...args: any[]) {
-      super(schema, args[0]);
+    constructor(data?: unknown) {
+      super(schema, data);
     }
   };
 
@@ -134,7 +112,7 @@ export function createStructCommand<
     configurable: true,
   });
 
-  return StructCommandClass as unknown as StructCommandConstructor<
+  return StructCommandClass as unknown as NamedStructCommand<
     TInputSchema,
     TOutputSchema
   >;
