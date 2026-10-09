@@ -1,21 +1,21 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@collidor/command@^7.2.1": "7.3.0",
-    "jsr:@collidor/event@^4.7.0": "4.7.0",
+    "jsr:@collidor/command@^7.3.4": "7.3.4",
+    "jsr:@collidor/event@^4.7.2": "4.7.2",
     "jsr:@std/assert@^1.0.11": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "npm:zod@^3.24.2": "3.25.76"
   },
   "jsr": {
-    "@collidor/command@7.3.0": {
-      "integrity": "1374cd3510b3460c284179f5913ffc015a31564d3a48dec3e4da5157d8ccdb5d",
+    "@collidor/command@7.3.4": {
+      "integrity": "f1658d6b4e93470ae0f460b42737a3da4679a354422bc2bccc5c0a0a2635944a",
       "dependencies": [
         "jsr:@collidor/event"
       ]
     },
-    "@collidor/event@4.7.0": {
-      "integrity": "5ee6dad931d8fe6f70b14998ef5eae3153590dd632997137049888cc23bd2a30"
+    "@collidor/event@4.7.2": {
+      "integrity": "4b8c4c70abbb2931baf6ab0734683edc196a6f30d58195fbea49338cd5f043c9"
     },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
@@ -34,7 +34,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@collidor/command@^7.2.1",
+      "jsr:@collidor/command@^7.3.4",
       "jsr:@std/assert@^1.0.11",
       "jsr:@std/testing@^1.0.9",
       "npm:vee-validate@^4.15.1",
