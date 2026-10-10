@@ -1,10 +1,13 @@
-import type { BaseSchema } from "@collidor/struct";
 import {
   ComponentResolutionError,
   extractComponents,
   getComponent,
+  getComponentName,
   type ComponentKey,
+  type In,
   type NamedComponent,
+  type NameOf,
+  type Out,
 } from "@collidor/struct";
 
 export { ComponentResolutionError, type ComponentKey, type NamedComponent };
@@ -17,10 +20,6 @@ export interface ComponentRequirement<
   readonly [REQUIREMENT]: true;
   readonly components: TList;
 }
-
-type Out<T> = T extends BaseSchema<any, infer O> ? O : never;
-type In<T> = T extends BaseSchema<infer I, any> ? I : never;
-type NameOf<C> = C extends { readonly __name: infer N extends string } ? N : never;
 
 /**
  * What the handler receives (`cmd.data`): the bare component for a single requirement,
@@ -58,7 +57,9 @@ export function requires<const L extends readonly [NamedComponent, ...NamedCompo
   ...components: L
 ): ComponentRequirement<L> {
   for (const c of components) {
-    if (typeof (c as any)?.descriptor?.name !== "string" || (c as any).descriptor.name === "") {
+    try {
+      getComponentName(c);
+    } catch {
       throw new TypeError('requires(): components must be named, e.g. s.struct({...}).named("Position")');
     }
   }
@@ -73,6 +74,12 @@ export function isComponentRequirement(value: unknown): value is ComponentRequir
 export const resolveComponent = getComponent;
 
 /** Resolves every required component from `source` into the command's `data` payload. */
-export function extractRequirement(requirement: ComponentRequirement, source: unknown): any {
-  return (extractComponents as any)(source, ...requirement.components);
+export function extractRequirement<R extends ComponentRequirement>(
+  requirement: R,
+  source: unknown,
+): RequirementOutput<R> {
+  return extractComponents(
+    source,
+    ...requirement.components,
+  ) as RequirementOutput<R>;
 }

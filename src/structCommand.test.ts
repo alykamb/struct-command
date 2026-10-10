@@ -111,14 +111,13 @@ Deno.test("commandBus - should register and execute a structCommand synchronousl
 Deno.test("commandBus - should register and execute a structCommand asynchronously", async () => {
   const asyncBus = new AsyncCommandBus();
 
-  asyncBus.register(CreateUserCommand, async (command) => {
-    await Promise.resolve();
+  asyncBus.register(CreateUserCommand, (command) => {
     assertEquals(command.data.name, "Alice");
 
-    return {
+    return Promise.resolve({
       success: true,
       id: "async_user_999",
-    };
+    });
   });
 
   const result = await asyncBus.execute(

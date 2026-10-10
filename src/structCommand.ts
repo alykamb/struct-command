@@ -107,7 +107,7 @@ export function parseStructDefault<T = any>(schema: any): T {
  */
 export function extractStructInput<T = any>(input: AnyCommandInput, data: unknown): T {
   if (isComponentRequirement(input)) {
-    return extractRequirement(input, data);
+    return extractRequirement(input, data) as T;
   }
   if (data === undefined) {
     return parseStructDefault(input);
