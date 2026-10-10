@@ -5,7 +5,8 @@
         "@collidor/command": "jsr:@collidor/command@^7.3.4",
         "@collidor/struct": "../struct/src/index.ts",
         "zod": "npm:zod@^3.24.2",
-        "vee-validate": "npm:vee-validate@^4.15.1"
+        "vee-validate": "npm:vee-validate@^4.15.1",
+        "fast-check": "npm:fast-check@^4.10.2"
     },
     "unstable": ["sloppy-imports"],
     "compilerOptions": {
